@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  youtube-finance-ai:
+    build: .
+    container_name: youtube-finance-ai
+    volumes:
+      # 挂载下载目录到宿主机
+      - ./downloads:/app/downloads
+      - ./test_downloads:/app/test_downloads
+      # 挂载源代码方便开发（可选）
+      - ./src:/app/src
+    environment:
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+      - CUDA_VISIBLE_DEVICES=0
+    # GPU支持
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    # 或者使用runtime方式（根据Docker版本选择）
+    # runtime: nvidia
+    stdin_open: true
+    tty: true
+    working_dir: /app
+    
+  # 可选：添加Jupyter notebook服务用于交互开发
+  jupyter:
+    build: .
+    container_name: youtube-finance-ai-jupyter
+    command: jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root --NotebookApp.token='' --NotebookApp.password=''
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./:/app
+      - ./downloads:/app/downloads
+    environment:
+      - PYTHONPATH=/app
+      - CUDA_VISIBLE_DEVICES=0
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    profiles: ["jupyter"]  # 使用 docker-compose --profile jupyter up 启动
