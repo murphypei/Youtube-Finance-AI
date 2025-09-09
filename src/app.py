@@ -24,19 +24,21 @@ def download_and_transcribe_youtube(
     output_dir: Optional[str] = None,
     filename: Optional[str] = None,
     audio_format: str = 'webm',
+    video_format: str = 'none',
     model_size: str = "base",
     language: str = "auto",
     use_date_folder: bool = True,
     **whisper_kwargs
 ) -> Dict[str, Any]:
     """
-    下载YouTube音频并使用ASR服务转录为文本
+    下载YouTube音频/视频并使用ASR服务转录为文本
     
     Args:
         youtube_url: YouTube视频链接
         output_dir: 输出目录，默认为当前目录的downloads文件夹
         filename: 输出文件名（不含扩展名），为None时使用默认命名
         audio_format: 音频格式，推荐'webm'
+        video_format: 视频格式 ("mp4", "webm", "mkv", "none")，'none'表示不下载视频
         model_size: Whisper模型大小 ("tiny", "base", "small", "medium", "large")
         language: 语言设置 ("auto", "zh", "en", "zh-en")
         **whisper_kwargs: Whisper的额外参数
@@ -77,22 +79,51 @@ def download_and_transcribe_youtube(
         for subdir in subdirs:
             (date_output_dir / subdir).mkdir(exist_ok=True)
     
-    # 步骤2: 下载音频
+    # 步骤2a: 下载视频（如果需要）
+    video_download_result = None
+    if video_format.lower() != 'none':
+        print(f"🎬 开始下载视频 (格式: {video_format})...")
+        # 创建视频专用下载器，指向video子目录
+        if use_date_folder:
+            video_output_dir = date_output_dir / 'video'
+        else:
+            video_output_dir = Path(final_output_dir) / 'video'
+        
+        video_downloader = YouTubeDownloader(str(video_output_dir))
+        video_download_result = video_downloader.download_video(youtube_url, filename, video_format)
+        
+        if video_download_result['success']:
+            print(f"✅ 视频下载成功: {video_download_result['title']}")
+        else:
+            print(f"⚠️ 视频下载失败: {video_download_result.get('error', '未知错误')}")
+            # 视频下载失败不影响音频处理流程，继续执行
+    else:
+        print("📝 跳过视频下载 (format=none)")
+
+    # 步骤2b: 下载音频
     print("📥 开始下载音频...")
-    download_result = downloader.download_audio(youtube_url, filename, audio_format)
+    # 创建音频专用下载器，指向audio子目录
+    if use_date_folder:
+        audio_output_dir = date_output_dir / 'audio'
+    else:
+        audio_output_dir = Path(final_output_dir) / 'audio'
+    
+    audio_downloader = YouTubeDownloader(str(audio_output_dir))
+    download_result = audio_downloader.download_audio(youtube_url, filename, audio_format)
     
     if not download_result['success']:
         return {
             'success': False,
             'error': f"音频下载失败: {download_result.get('error', '未知错误')}",
             'url': youtube_url,
-            'download_result': download_result
+            'download_result': download_result,
+            'video_download_result': video_download_result
         }
     
     print(f"✅ 音频下载成功: {download_result['title']}")
     
     # 步骤3: 查找下载的音频文件
-    audio_files = list(downloader.download_dir.glob(f"{filename or '*'}.*"))
+    audio_files = list(audio_downloader.download_dir.glob(f"{filename or '*'}.*"))
     audio_file = None
     
     for file in audio_files:
@@ -105,7 +136,8 @@ def download_and_transcribe_youtube(
             'success': False,
             'error': '找不到下载的音频文件',
             'url': youtube_url,
-            'download_result': download_result
+            'download_result': download_result,
+            'video_download_result': video_download_result
         }
     
     print(f"📄 找到音频文件: {audio_file}")
@@ -206,7 +238,7 @@ def download_and_transcribe_youtube(
     print(f"💾 详细分析已保存至: {info_file}")
     
     # 返回综合结果
-    return {
+    result = {
         'success': True,
         'title': download_result.get('title', '未知'),
         'duration': download_result.get('duration', 0),
@@ -219,23 +251,41 @@ def download_and_transcribe_youtube(
         'model_size': model_size,
         'service': 'whisper',
         'download_result': download_result,
+        'video_download_result': video_download_result,
         'transcription_result': transcription_result,
         'key_info': key_info,
         'info_file': str(info_file),
         'message': f"成功下载、转录并分析: {download_result.get('title', '未知')}"
     }
+    
+    # 添加视频文件信息（如果下载了视频）
+    if video_download_result and video_download_result.get('success'):
+        # 查找下载的视频文件
+        if use_date_folder:
+            video_dir = date_output_dir / 'video'
+        else:
+            video_dir = Path(final_output_dir) / 'video'
+            
+        video_files = list(video_dir.glob(f"{filename or '*'}.*"))
+        for file in video_files:
+            if file.suffix.lower() in ['.mp4', '.webm', '.mkv', '.avi']:
+                result['video_file'] = str(file)
+                break
+    
+    return result
 
 
 def main():
     """主函数，处理命令行参数或交互式输入"""
     parser = argparse.ArgumentParser(
-        description="🎵 YouTube音频下载和转录工具",
+        description="🎵 YouTube音视频下载和转录工具",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
   python app.py "https://www.youtube.com/watch?v=XXXXX"
   python app.py --url "https://www.youtube.com/watch?v=XXXXX" --filename "finance_video"
   python app.py --url "https://www.youtube.com/watch?v=XXXXX" --model large --no-date-folder
+  python app.py --url "https://www.youtube.com/watch?v=XXXXX" --video-format mp4 --audio-format wav
         """
     )
     
@@ -252,10 +302,16 @@ def main():
         help='输出文件名 (不含扩展名，默认自动生成)'
     )
     parser.add_argument(
-        '--format', 
+        '--audio-format', 
         choices=['webm', 'mp3', 'm4a', 'wav'], 
         default='webm',
         help='音频格式 (默认: webm)'
+    )
+    parser.add_argument(
+        '--video-format', 
+        choices=['none', 'mp4', 'webm', 'mkv'], 
+        default='none',
+        help='视频格式，none表示不下载视频 (默认: none)'
     )
     parser.add_argument(
         '--model', 
@@ -303,7 +359,8 @@ def main():
     
     print(f"🔗 处理链接: {youtube_url}")
     print(f"📝 文件名: {args.filename or '自动生成'}")
-    print(f"🎵 音频格式: {args.format}")
+    print(f"🎵 音频格式: {args.audio_format}")
+    print(f"🎬 视频格式: {args.video_format}")
     print(f"🧠 模型大小: {args.model}")
     print(f"🌐 语言设置: {args.language}")
     print(f"📁 按日期组织: {'否' if args.no_date_folder else '是'}")
@@ -315,7 +372,8 @@ def main():
         youtube_url=youtube_url,
         output_dir=args.output_dir,
         filename=args.filename,
-        audio_format=args.format,
+        audio_format=args.audio_format,
+        video_format=args.video_format,
         model_size=args.model,
         language=args.language,
         use_date_folder=not args.no_date_folder

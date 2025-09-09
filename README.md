@@ -59,7 +59,7 @@ git clone <repository-url>
 cd Youtube-Finance-AI
 ```
 
-### 2. 安装依赖 (非Docker方式)
+### 2. 安装依赖 (非Docker方式，不推荐)
 
 ```bash
 # 使用uv (推荐，更快的包管理器)
@@ -80,7 +80,7 @@ cp config/gemini_config.json.template config/gemini_config.json
 
 详细配置说明请参考 [config/README.md](config/README.md)
 
-### 4. 构建Docker镜像
+### 4. 构建Docker镜像（推荐）
 
 ```bash
 ./docker-run.sh build
@@ -89,7 +89,7 @@ cp config/gemini_config.json.template config/gemini_config.json
 ### 5. 处理YouTube视频
 
 ```bash
-./docker-run.sh process "https://www.youtube.com/watch?v=视频ID" --filename "my_video" --model large --format wav
+./docker-run.sh process "https://www.youtube.com/watch?v=视频ID" --filename "my_video" --model large --audio-format wav
 ```
 
 ## 📊 结果输出
@@ -154,7 +154,8 @@ python src/app.py --help
 
 选项:
   --filename TEXT        输出文件名
-  --format [webm|mp3|m4a|wav]  音频格式 (默认: webm)
+  --audio-format [webm|mp3|m4a|wav]  音频格式 (默认: webm)
+  --video-format [none|mp4|webm|mkv]  视频格式 (默认: none)
   --model [tiny|base|small|medium|large]  Whisper模型 (默认: base)
   --language [auto|zh|en|zh-en]  语言设置 (默认: auto)
   --no-date-folder      不使用日期文件夹组织

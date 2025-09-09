@@ -29,13 +29,14 @@ class YouTubeDownloader:
         self.download_dir.mkdir(parents=True, exist_ok=True)
         
 
-    def download_video(self, url: str, output_filename: Optional[str] = None) -> Dict[str, Any]:
+    def download_video(self, url: str, output_filename: Optional[str] = None, video_format: str = "mp4") -> Dict[str, Any]:
         """
         下载视频
 
         Args:
             url: YouTube视频URL
             output_filename: 输出文件名（不包括扩展名），为None时使用默认命名
+            video_format: 视频格式，支持 'mp4', 'webm', 'mkv' 等
 
         Returns:
             Dict包含下载结果信息
@@ -45,8 +46,22 @@ class YouTubeDownloader:
         # 配置yt-dlp选项
         ydl_opts = {
             "outtmpl": self._get_output_template(output_filename, "video"),
-            "format": "best[ext=mp4]/best",  # 优先下载mp4格式的最佳质量视频
         }
+        
+        # 根据指定格式设置下载选项
+        if video_format.lower() == "mp4":
+            ydl_opts["format"] = "best[ext=mp4]/best"
+            print(f"使用MP4格式下载视频")
+        elif video_format.lower() == "webm":
+            ydl_opts["format"] = "best[ext=webm]/best"
+            print(f"使用WebM格式下载视频")
+        elif video_format.lower() == "mkv":
+            ydl_opts["format"] = "best[ext=mkv]/best"
+            print(f"使用MKV格式下载视频")
+        else:
+            # 默认使用最佳质量，优先mp4
+            ydl_opts["format"] = "best[ext=mp4]/best"
+            print(f"使用默认格式(MP4)下载视频")
 
         return self._download_with_ytdlp(url, ydl_opts, "video")
 

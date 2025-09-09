@@ -80,7 +80,7 @@ process() {
         echo -e "${YELLOW}示例:${NC}"
         echo -e "${YELLOW}  $0 process 'https://www.youtube.com/watch?v=X-WKPmeeGLM'${NC}"
         echo -e "${YELLOW}  $0 process 'https://www.youtube.com/watch?v=X-WKPmeeGLM' --filename 'finance_video'${NC}"
-        echo -e "${YELLOW}  $0 process 'https://www.youtube.com/watch?v=X-WKPmeeGLM' --model large --format wav${NC}"
+        echo -e "${YELLOW}  $0 process 'https://www.youtube.com/watch?v=X-WKPmeeGLM' --model large --audio-format wav${NC}"
         return 1
     fi
     
@@ -128,7 +128,7 @@ help() {
     echo "  $0 build                                      - 构建镜像"
     echo "  $0 process 'https://www.youtube.com/watch?v=X-WKPmeeGLM'"
     echo "  $0 process 'https://www.youtube.com/watch?v=X-WKPmeeGLM' --filename 'finance_video'"
-    echo "  $0 process 'https://www.youtube.com/watch?v=X-WKPmeeGLM' --model large"
+    echo "  $0 process 'https://www.youtube.com/watch?v=X-WKPmeeGLM' --model large --video-format mp4"
     echo "  $0 app                                        - 启动交互式应用"
 }
 
