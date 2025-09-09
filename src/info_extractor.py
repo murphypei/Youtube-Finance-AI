@@ -123,139 +123,7 @@ class FinancialInfoExtractor:
                 logger.info(f"✅ 使用外部prompt模板: {prompt_file}")
                 return prompt
             except Exception as e:
-                logger.warning(f"⚠️ 读取prompt模板失败，使用内置模板: {e}")
-        
-        # 如果外部模板不可用，使用内置模板
-        prompt = f"""你是一位专业的金融分析师，请从以下财经视频的转录文本中提取关键投资信息。
-
-视频标题: {title}
-
-转录文本:
-{text}
-
-请仔细分析转录内容，提取以下信息并以严格的JSON格式返回：
-
-{{
-    "summary": "用2-3句话概括视频的核心内容和主要观点",
-    "market_overview": {{
-        "date": "视频讨论的具体日期(YYYY-MM-DD格式)",
-        "major_indices": [
-            {{
-                "name": "指数名称(如S&P500、NASDAQ、Russell等)",
-                "performance": "涨跌幅度，包含具体数字和百分比",
-                "current_level": "当前点位或价格",
-                "key_levels": ["技术关键位置"],
-                "analysis": "对该指数的具体分析观点"
-            }}
-        ],
-        "market_sentiment": "整体市场情绪和趋势判断"
-    }},
-    "macroeconomic_data": [
-        {{
-            "indicator": "经济指标名称(如非农就业、CPI、PMI等)",
-            "actual_value": "实际公布数值",
-            "expected_value": "市场预期数值",
-            "previous_value": "前值",
-            "impact": "对市场的具体影响分析",
-            "interpretation": "数据解读"
-        }}
-    ],
-    "stock_analysis": [
-        {{
-            "symbol": "股票代码(如TSLA、AAPL、NVDA等)",
-            "company_name": "公司全名",
-            "current_price": "当前股价",
-            "price_change": "涨跌幅",
-            "key_points": [
-                "关键分析要点，包括业绩、新闻、技术面等"
-            ],
-            "price_levels": {{
-                "support": ["支撑位价格"],
-                "resistance": ["阻力位价格"],
-                "target": ["目标价位"]
-            }},
-            "financial_data": {{
-                "revenue": "营收数据",
-                "earnings": "盈利数据",
-                "guidance": "业绩指引"
-            }},
-            "outlook": "未来走势判断和投资观点",
-            "risk_factors": ["主要风险因素"]
-        }}
-    ],
-    "key_events": [
-        {{
-            "event": "重要事件详细描述",
-            "companies_affected": ["受影响的公司"],
-            "date": "事件日期",
-            "impact": "预期影响程度和方向",
-            "significance": "事件重要性评估"
-        }}
-    ],
-    "investment_advice": [
-        {{
-            "type": "建议类型(买入/卖出/持有/观望)",
-            "target": "针对对象(个股/板块/市场)",
-            "rationale": "建议理由",
-            "time_horizon": "建议期限",
-            "risk_level": "风险等级"
-        }}
-    ],
-    "technical_analysis": [
-        {{
-            "asset": "分析对象",
-            "pattern": "技术形态",
-            "indicators": "技术指标信号",
-            "trend": "趋势判断",
-            "entry_exit_points": "进出场点位"
-        }}
-    ],
-    "risks_and_warnings": [
-        {{
-            "risk_type": "风险类型",
-            "description": "风险详细描述",
-            "probability": "发生概率评估",
-            "potential_impact": "潜在影响",
-            "mitigation": "应对策略"
-        }}
-    ],
-    "fed_policy": {{
-        "interest_rate_outlook": "利率前景",
-        "policy_implications": "政策影响",
-        "market_expectations": "市场预期"
-    }},
-    "sector_rotation": [
-        {{
-            "from_sector": "资金流出板块",
-            "to_sector": "资金流入板块",
-            "reason": "轮动原因",
-            "duration": "预期持续时间"
-        }}
-    ]
-}}
-
-提取要求：
-1. 只提取文本中明确提及的信息，不要推测或编造
-2. 数字数据要精确，包含单位
-3. 股票代码统一用美股格式
-4. 价格数据保留小数点
-5. 日期格式为YYYY-MM-DD
-6. 如果某个字段没有信息，使用空数组[]或空字符串""
-7. 确保返回有效JSON格式
-8. 专注于投资价值高的信息
-9. 提取具体的数字、百分比、价格点位
-10. 识别中文股票名称对应的美股代码(如特斯拉->TSLA，苹果->AAPL，博通->AVGO，英伟达->NVDA)
-
-特别关注：
-- 具体的股价和涨跌幅
-- 财报数据(营收、利润、指引)
-- 技术分析的关键点位
-- 宏观经济数据的实际值vs预期值
-- 投资建议的具体操作和理由
-- 风险提示的具体内容
-
-请开始分析提取："""
-        return prompt
+                raise RuntimeError(f"⚠️ 读取prompt模板失败, prompt_file: {prompt_file}, error: {e}")
     
     def _extract_without_llm(self, text: str, title: str) -> Dict[str, Any]:
         """不使用LLM的基础信息提取"""
@@ -384,7 +252,7 @@ def extract_financial_info(transcription_text: str,
 def test_with_real_transcription():
     """使用真实的转录文本测试LLM信息提取功能"""
     # 读取真实的转录文本
-    transcription_file = Path(__file__).parent.parent / "downloads" / "test_whisper_transcribe.txt"
+    transcription_file = Path(__file__).parent.parent / "downloads" / "2025-09-09" / "transcription" / "视野环球财经-2025-09-09.txt"
     
     if not transcription_file.exists():
         print(f"❌ 转录文件不存在: {transcription_file}")
@@ -402,11 +270,11 @@ def test_with_real_transcription():
         extractor = FinancialInfoExtractor()
         result = extractor.extract_key_info(
             transcription_text=real_transcription,
-            video_title="美股 标普新高又跌不动了？TSLA马斯克很硬气！LULU业绩加速衰退！AVGO大客户助力继续冲锋！"
+            video_title="美股 NVDA获得部分H20许可！APP、HOOD更新，进标普500！MSTR再落选，技术风险！UNH临门一脚！"
         )
         
         # 保存结果
-        output_file = Path(__file__).parent.parent / "downloads" / "extracted_info_test.json"
+        output_file = Path(__file__).parent.parent / "downloads" / "2025-09-09" / "analysis" / "视野环球财经-2025-09-09_analysis2.json"
         extractor.save_extracted_info(result, str(output_file))
         
         # 显示提取结果摘要
