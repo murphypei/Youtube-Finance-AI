@@ -246,7 +246,7 @@ if __name__ == "__main__":
         print(f"  {model}: {details['size']}, {details['speed']}, {details['description']}")
     
     # 如果有测试音频文件，进行转录测试
-    test_audio_dir = Path("test_downloads")
+    test_audio_dir = Path("downloads")
     if test_audio_dir.exists():
         audio_files = list(test_audio_dir.glob("*.webm"))
         if audio_files and info['whisper_available']:

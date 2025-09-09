@@ -30,7 +30,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # 升级pip并安装依赖（优化层缓存）
 RUN pip install --upgrade pip && \
-    pip install openai-whisper
+    pip install openai-whisper && \
+    pip install google-genai google-api-core
 
 # 复制并安装项目依赖（先复制不经常变化的文件）
 COPY pyproject.toml .
@@ -40,11 +41,11 @@ RUN pip install -e .
 COPY src/ ./src/
 
 # 创建必要目录并预下载模型
-RUN mkdir -p /app/downloads /app/test_downloads && \
+RUN mkdir -p /app/downloads /app/downloads && \
     python -c "import whisper; whisper.load_model('base')"
 
 # 暴露端口（如果将来需要Web界面）
 EXPOSE 8000
 
 # 设置默认命令
-CMD ["python", "-m", "src.youtube_downloader"]
+CMD ["python", "src/app.py"]

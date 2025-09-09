@@ -1,5 +1,6 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
+*.pyc
 *.py[cod]
 *$py.class
 
@@ -144,7 +145,7 @@ dmypy.json
 ehthumbs.db
 Thumbs.db
 
-# Project specific
+# Project specific - Downloaded media files
 downloads/
 test_downloads/
 *.mp4
@@ -153,6 +154,38 @@ test_downloads/
 *.m4a
 *.wav
 *.flac
+
+# Sensitive configuration files - DO NOT COMMIT
+config/gemini_config.json
+config/*_config.json
+config/*.key
+config/*.pem
+*.credentials
+*_credentials.json
+service_account*.json
+
+# API keys and secrets
+.env*
+*.secret
+*secret*
+*_key.json
+*_keys.json
+
+# LLM and AI model files
+models/
+*.model
+*.bin
+*.safetensors
+
+# Generated extraction results (may contain sensitive analysis)
+*extracted_info*.json
+*analysis_result*.json
+
+# Debug and test files (may contain sensitive data)
+test_llm_debug.py
+debug_*.py
+*debug*.json
+*test_result*.json
 
 # uv
 .uv/

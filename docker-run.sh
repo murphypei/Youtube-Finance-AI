@@ -41,12 +41,6 @@ build() {
     echo -e "${GREEN}✅ 镜像构建完成${NC}"
 }
 
-# 运行主应用
-run() {
-    echo -e "${BLUE}🚀 启动YouTube Finance AI应用...${NC}"
-    check_gpu
-    docker-compose up youtube-finance-ai
-}
 
 # 运行交互式shell
 shell() {
@@ -55,6 +49,14 @@ shell() {
     docker-compose run --rm youtube-finance-ai bash
 }
 
+# 运行app.py交互式应用
+app() {
+    echo -e "${BLUE}📱 启动交互式应用...${NC}"
+    check_gpu
+    docker-compose run --rm youtube-finance-ai python src/app.py
+}
+
+
 # 运行Python命令
 python() {
     echo -e "${BLUE}🐍 运行Python命令...${NC}"
@@ -62,57 +64,6 @@ python() {
     docker-compose run --rm youtube-finance-ai python "$@"
 }
 
-# 测试Whisper功能
-test_whisper() {
-    echo -e "${BLUE}🎤 测试Whisper ASR功能...${NC}"
-    check_gpu
-    docker-compose run --rm youtube-finance-ai python -m src.asr_service
-}
-
-# 下载并转录YouTube视频
-transcribe() {
-    if [ -z "$1" ]; then
-        echo -e "${YELLOW}📖 使用方法: $0 transcribe <YouTube_URL> [filename]${NC}"
-        echo -e "${YELLOW}示例: $0 transcribe 'https://www.youtube.com/watch?v=X-WKPmeeGLM' 'finance_video'${NC}"
-        return 1
-    fi
-    
-    local url="$1"
-    local filename="${2:-youtube_transcribe}"
-    
-    echo -e "${BLUE}🎬 下载并转录YouTube视频...${NC}"
-    echo -e "${YELLOW}URL: $url${NC}"
-    echo -e "${YELLOW}文件名: $filename${NC}"
-    
-    check_gpu
-    docker-compose run --rm youtube-finance-ai python -c "
-from src.youtube_downloader import download_and_transcribe_youtube
-import sys
-
-url = '$url'
-filename = '$filename'
-
-print(f'🎯 开始处理: {url}')
-result = download_and_transcribe_youtube(
-    url,
-    filename=filename,
-    model_size='base',
-    language='auto'
-)
-
-if result['success']:
-    print(f'✅ 成功完成!')
-    print(f'📺 标题: {result[\"title\"]}')
-    print(f'🌐 语言: {result[\"language_display\"]}')
-    print(f'📝 文本长度: {len(result[\"text\"])}')
-    print(f'📄 文本文件: {result[\"text_file\"]}')
-    if result['text']:
-        print(f'📖 文本预览: {result[\"text\"][:200]}...')
-else:
-    print(f'❌ 处理失败: {result.get(\"error\", \"Unknown error\")}')
-    sys.exit(1)
-"
-}
 
 # 启动Jupyter服务
 jupyter() {
@@ -121,6 +72,28 @@ jupyter() {
     check_gpu
     docker-compose --profile jupyter up jupyter
 }
+
+# 处理指定YouTube视频
+process() {
+    if [ -z "$1" ]; then
+        echo -e "${YELLOW}📖 使用方法: $0 process <YouTube_URL> [options]${NC}"
+        echo -e "${YELLOW}示例:${NC}"
+        echo -e "${YELLOW}  $0 process 'https://www.youtube.com/watch?v=X-WKPmeeGLM'${NC}"
+        echo -e "${YELLOW}  $0 process 'https://www.youtube.com/watch?v=X-WKPmeeGLM' --filename 'finance_video'${NC}"
+        echo -e "${YELLOW}  $0 process 'https://www.youtube.com/watch?v=X-WKPmeeGLM' --model large --format wav${NC}"
+        return 1
+    fi
+    
+    local url="$1"
+    shift  # 移除第一个参数，剩下的作为选项传递
+    
+    echo -e "${BLUE}🎬 处理YouTube视频...${NC}"
+    echo -e "${YELLOW}URL: $url${NC}"
+    
+    check_gpu
+    docker-compose run --rm youtube-finance-ai python src/app.py "$url" "$@"
+}
+
 
 # 清理Docker资源
 clean() {
@@ -137,12 +110,12 @@ help() {
     echo -e "${YELLOW}基本命令:${NC}"
     echo "  $0 build              - 构建Docker镜像"
     echo "  $0 run                - 运行主应用"
+    echo "  $0 app                - 启动交互式应用（app.py）"
     echo "  $0 shell              - 启动交互式Shell"
     echo "  $0 python <args>      - 运行Python命令"
     echo ""
-    echo -e "${YELLOW}ASR功能:${NC}"
-    echo "  $0 test-whisper       - 测试Whisper功能"
-    echo "  $0 transcribe <url> [name] - 下载并转录YouTube视频"
+    echo -e "${YELLOW}YouTube处理:${NC}"
+    echo "  $0 process <url>      - 处理指定的YouTube视频"
     echo ""
     echo -e "${YELLOW}开发工具:${NC}"
     echo "  $0 jupyter            - 启动Jupyter Notebook"
@@ -152,7 +125,11 @@ help() {
     echo "  $0 help               - 显示此帮助信息"
     echo ""
     echo -e "${YELLOW}示例:${NC}"
-    echo "  $0 transcribe 'https://www.youtube.com/watch?v=X-WKPmeeGLM' 'finance_video'"
+    echo "  $0 build                                      - 构建镜像"
+    echo "  $0 process 'https://www.youtube.com/watch?v=X-WKPmeeGLM'"
+    echo "  $0 process 'https://www.youtube.com/watch?v=X-WKPmeeGLM' --filename 'finance_video'"
+    echo "  $0 process 'https://www.youtube.com/watch?v=X-WKPmeeGLM' --model large"
+    echo "  $0 app                                        - 启动交互式应用"
 }
 
 # 主命令处理
@@ -163,19 +140,19 @@ case "${1:-help}" in
     run)
         run
         ;;
+    app)
+        app
+        ;;
+    process)
+        shift
+        process "$@"
+        ;;
     shell)
         shell
         ;;
     python)
         shift
         python "$@"
-        ;;
-    test-whisper)
-        test_whisper
-        ;;
-    transcribe)
-        shift
-        transcribe "$@"
         ;;
     jupyter)
         jupyter

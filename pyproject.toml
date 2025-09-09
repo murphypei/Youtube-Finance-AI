@@ -20,6 +20,10 @@ dev = [
 whisper = [
     "openai-whisper>=20231117",
 ]
+gemini = [
+    "google-genai>=0.8.0",
+    "google-api-core>=2.15.0",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
