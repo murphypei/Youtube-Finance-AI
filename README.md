@@ -70,31 +70,8 @@ cp config/gemini_config.json.template config/gemini_config.json
 
 ### 4. 处理YouTube视频
 
-#### 方式一：使用预设链接 (推荐)
-
-编辑 `docker-run.sh` 中的 `default_url` 变量，设置你的YouTube链接：
-
 ```bash
-# 编辑docker-run.sh，修改quick函数中的default_url
-local default_url="https://www.youtube.com/watch?v=你的视频ID"
-```
-
-然后运行：
-
-```bash
-./docker-run.sh quick
-```
-
-#### 方式二：指定链接处理
-
-```bash
-./docker-run.sh process "https://www.youtube.com/watch?v=视频ID"
-```
-
-#### 方式三：带选项处理
-
-```bash
-./docker-run.sh process "https://www.youtube.com/watch?v=视频ID" --filename "my_video" --model large --format mp3
+./docker-run.sh process "https://www.youtube.com/watch?v=视频ID" --filename "my_video" --model large --format wav
 ```
 
 ## 📊 结果输出
@@ -142,9 +119,6 @@ python src/app.py --help
 ```bash
 # 构建镜像
 ./docker-run.sh build
-
-# 处理视频（推荐）
-./docker-run.sh quick --model large
 
 # 指定链接处理
 ./docker-run.sh process "https://youtube.com/watch?v=ID"

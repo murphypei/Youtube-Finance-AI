@@ -39,6 +39,8 @@ RUN pip install -e .
 
 # 复制源代码（最后复制，避免代码变化影响前面的缓存）
 COPY src/ ./src/
+COPY prompts/ ./prompts/
+COPY config/ ./config/
 
 # 创建必要目录并预下载模型
 RUN mkdir -p /app/downloads /app/downloads && \
