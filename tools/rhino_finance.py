@@ -251,8 +251,8 @@ def main():
     parser.add_argument(
         '--model',
         choices=['tiny', 'base', 'small', 'medium', 'large'],
-        default='base',
-        help='Whisper模型大小 (默认: base)'
+        default='large',
+        help='Whisper模型大小 (默认: large)'
     )
     
     args = parser.parse_args()
