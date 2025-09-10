@@ -31,14 +31,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # 升级pip并安装依赖（优化层缓存）
 RUN pip install --upgrade pip && \
     pip install openai-whisper && \
-    pip install google-genai google-api-core
+    pip install google-genai google-api-core && \
+    pip install jupyter notebook ipywidgets && \
+    pip install flask pandas matplotlib seaborn plotly
 
 # 复制并安装项目依赖（先复制不经常变化的文件）
 COPY pyproject.toml .
 RUN pip install -e .
 
 # 复制源代码（最后复制，避免代码变化影响前面的缓存）
-COPY src/ ./src/
+COPY core/ ./core/
+COPY tools/ ./tools/
+COPY web/ ./web/
+COPY run_app.py ./
 COPY prompts/ ./prompts/
 COPY config/ ./config/
 
@@ -46,8 +51,10 @@ COPY config/ ./config/
 RUN mkdir -p /app/downloads /app/downloads && \
     python -c "import whisper; whisper.load_model('base')"
 
-# 暴露端口（如果将来需要Web界面）
-EXPOSE 8000
+# 暴露端口
+EXPOSE 8850
+EXPOSE 8851
+EXPOSE 8852
 
 # 设置默认命令
-CMD ["python", "src/app.py"]
+CMD ["python", "run_app.py", "single"]

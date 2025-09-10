@@ -17,7 +17,7 @@ project_dir = Path(__file__).parent.parent
 # Gemini配置
 gemini_config = {
     # 基础配置
-    "project_id": "xxx",  # 和config中保持一致
+    "project_id": "xxxx",  # 和config中保持一致
     "location": "us-central1",
     "model": "gemini-2.5-pro",
     "credentials_path": os.path.join(project_dir, "config", "gemini_config.json"),  # 如果为None则使用默认路径
@@ -36,7 +36,7 @@ gemini_config = {
         {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "OFF"},
     ],
     # 计费标签
-    "billing_name": "xxx",
+    "billing_name": "xxxx",
 }
 
 class GeminiLLM:

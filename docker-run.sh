@@ -53,7 +53,7 @@ shell() {
 app() {
     echo -e "${BLUE}📱 启动交互式应用...${NC}"
     check_gpu
-    docker-compose run --rm youtube-finance-ai python src/app.py
+    docker-compose run --rm youtube-finance-ai python run_app.py single
 }
 
 
@@ -68,7 +68,7 @@ python() {
 # 启动Jupyter服务
 jupyter() {
     echo -e "${BLUE}📓 启动Jupyter Notebook...${NC}"
-    echo -e "${YELLOW}访问地址: http://localhost:8888${NC}"
+    echo -e "${YELLOW}访问地址: http://localhost:8850${NC}"
     check_gpu
     docker-compose --profile jupyter up jupyter
 }
@@ -91,7 +91,7 @@ process() {
     echo -e "${YELLOW}URL: $url${NC}"
     
     check_gpu
-    docker-compose run --rm youtube-finance-ai python src/app.py "$url" "$@"
+    docker-compose run --rm youtube-finance-ai python run_app.py single "$url" "$@"
 }
 
 

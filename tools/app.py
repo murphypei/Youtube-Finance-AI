@@ -9,14 +9,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional
 
-# 添加当前目录到Python路径，以便导入模块
-current_dir = Path(__file__).parent
-if str(current_dir) not in sys.path:
-    sys.path.insert(0, str(current_dir))
+# 添加项目根目录到Python路径，以便导入模块
+project_root = Path(__file__).parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
-from youtube_downloader import YouTubeDownloader
-from asr_service import WhisperASR, WHISPER_AVAILABLE
-from info_extractor import FinancialInfoExtractor
+from core.youtube_downloader import YouTubeDownloader
+from core.asr_service import WhisperASR, WHISPER_AVAILABLE
+from core.info_extractor import FinancialInfoExtractor
 
 
 def download_and_transcribe_youtube(
@@ -304,26 +304,26 @@ def main():
     parser.add_argument(
         '--audio-format', 
         choices=['webm', 'mp3', 'm4a', 'wav'], 
-        default='webm',
-        help='音频格式 (默认: webm)'
+        default='wav',
+        help='音频格式 (默认: wav)'
     )
     parser.add_argument(
         '--video-format', 
         choices=['none', 'mp4', 'webm', 'mkv'], 
-        default='none',
-        help='视频格式，none表示不下载视频 (默认: none)'
+        default='mp4',
+        help='视频格式，none表示不下载视频 (默认: mp4)'
     )
     parser.add_argument(
         '--model', 
         choices=['tiny', 'base', 'small', 'medium', 'large'], 
         default='base',
-        help='Whisper模型大小 (默认: base)'
+        help='Whisper模型大小 (默认: large)'
     )
     parser.add_argument(
         '--language', 
         choices=['auto', 'zh', 'en', 'zh-en'], 
-        default='auto',
-        help='语言设置 (默认: auto)'
+        default='zh-en',
+        help='语言设置 (默认: zh-en)'
     )
     parser.add_argument(
         '--no-date-folder', 

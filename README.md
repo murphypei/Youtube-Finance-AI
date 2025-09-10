@@ -18,12 +18,22 @@
 
 ```
 Youtube-Finance-AI/
-├── src/                          # 源代码
-│   ├── app.py                   # 主程序入口
-│   ├── youtube_downloader.py    # YouTube下载器
+├── core/                        # 核心功能模块
+│   ├── __init__.py
 │   ├── asr_service.py          # 语音识别服务
+│   ├── gemini_llm.py           # Gemini LLM接口
 │   ├── info_extractor.py       # 财经信息提取器
-│   └── gemini_llm.py           # Gemini LLM接口
+│   └── youtube_downloader.py   # YouTube下载器
+├── tools/                       # 工具脚本模块
+│   ├── __init__.py
+│   ├── app.py                  # 单视频处理工具
+│   ├── rhino_finance.py        # Rhino Finance批量处理
+│   └── run.py                  # 工具模块独立运行脚本
+├── web/                         # Web展示模块
+│   ├── __init__.py
+│   ├── analyzer.py             # 分析结果汇总器
+│   ├── web_dashboard.py        # Web仪表板
+│   └── run.py                  # Web模块独立运行脚本
 ├── prompts/                     # Prompt模板
 │   └── financial_extraction_prompt.txt
 ├── config/                      # 配置文件
@@ -36,6 +46,9 @@ Youtube-Finance-AI/
 │       ├── audio/              # 音频文件
 │       ├── transcription/      # 转录文本
 │       └── analysis/           # AI分析结果 (JSON格式)
+├── templates/                   # Web模板 (自动生成)
+│   └── dashboard.html
+├── run_app.py                  # 统一运行入口
 ├── pyproject.toml              # 现代Python项目配置
 ├── docker-compose.yml          # Docker Compose配置 (含GPU支持)
 ├── docker-run.sh               # Docker运行脚本
@@ -89,7 +102,11 @@ cp config/gemini_config.json.template config/gemini_config.json
 ### 5. 处理YouTube视频
 
 ```bash
+# 使用Docker处理单个视频
 ./docker-run.sh process "https://www.youtube.com/watch?v=视频ID" --filename "my_video" --model large --audio-format wav
+
+# 或使用统一入口直接运行
+python run_app.py single "https://www.youtube.com/watch?v=视频ID" --filename "my_video" --model large --audio-format wav
 ```
 
 ## 📊 结果输出
@@ -150,7 +167,11 @@ downloads/2025-01-15/
 ### 命令行选项
 
 ```bash
-python src/app.py --help
+# 使用统一入口 (推荐)
+python run_app.py single --help
+
+# 或直接运行
+python -m tools.app --help
 
 选项:
   --filename TEXT        输出文件名
@@ -160,6 +181,40 @@ python src/app.py --help
   --language [auto|zh|en|zh-en]  语言设置 (默认: auto)
   --no-date-folder      不使用日期文件夹组织
   --output-dir TEXT     自定义输出目录
+```
+
+## 🔧 重构后的使用方法
+
+### 统一运行入口 (推荐)
+
+```bash
+# 处理单个视频
+python run_app.py single "https://www.youtube.com/watch?v=XXXXX"
+
+# 批量处理Rhino Finance频道
+python run_app.py batch --limit 20
+
+# 生成分析汇总报告
+python run_app.py analyze
+
+# 启动Web仪表板
+python run_app.py web --port 8080
+```
+
+### 模块化运行方式
+
+```bash
+# 运行核心工具
+python -m tools.app "URL" --audio-format wav
+python -m tools.rhino_finance --limit 20
+
+# 运行Web服务
+python -m web.analyzer --macro-days 2
+python -m web.web_dashboard --debug
+
+# 使用各模块的独立运行脚本
+python tools/run.py app "URL"
+python web/run.py dashboard
 ```
 
 ### Docker命令

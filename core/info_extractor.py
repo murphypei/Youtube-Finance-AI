@@ -9,14 +9,16 @@ import logging
 from typing import Dict, Any, Optional, List
 from pathlib import Path
 
-sys.path.append(str(Path(__file__).parent.parent))
+project_root = Path(__file__).parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 # 设置日志
 logger = logging.getLogger(__name__)
 
 # 尝试导入gemini_llm
 try:
-    from src.gemini_llm import GeminiLLM, gemini_config
+    from core.gemini_llm import GeminiLLM, gemini_config
     GEMINI_AVAILABLE = True
 except ImportError as e:
     GEMINI_AVAILABLE = False
