@@ -3,6 +3,7 @@ import time
 import logging
 import traceback
 from pathlib import Path
+import random
 
 from google import genai
 from google.api_core import exceptions as google_exceptions
@@ -157,8 +158,9 @@ class GeminiLLM:
             request_max_tokens = max_tokens if max_tokens is not None else self.gemini_max_tokens
             request_thinking_budget = thinking_budget if thinking_budget is not None else self.gemini_thinking_budget
 
-            # 从 kwargs 中获取 response_mime_type
+            # 从 kwargs 中获取 response_mime_type 和 response_schema
             response_mime_type = kwargs.get("response_mime_type")
+            response_schema = kwargs.get("response_schema")
 
             # 设置默认labels
             labels = kwargs.get("labels", {"billing_name": self.gemini_billing_name})
@@ -182,6 +184,11 @@ class GeminiLLM:
                 config_params["response_mime_type"] = response_mime_type
                 self.logger.info(f"Setting response_mime_type to: {response_mime_type}")
             
+            # 如果指定了response_schema，添加到配置中
+            if response_schema:
+                config_params["response_schema"] = response_schema
+                self.logger.info(f"Setting response_schema with {len(response_schema.get('properties', {}))} properties")
+            
             generate_content_config = types.GenerateContentConfig(**config_params)
 
             # 如果有系统指令，添加到配置中
@@ -190,11 +197,11 @@ class GeminiLLM:
 
             start_time = time.time()
 
-            # 调用API
-            response = self.gemini_client.models.generate_content(
-                model=self.gemini_model_name,
+            # 使用重试机制调用API
+            response = self._call_with_retry(
                 contents=contents,
                 config=generate_content_config,
+                max_retries=self.gemini_max_retries
             )
 
             # 处理响应
@@ -237,3 +244,70 @@ class GeminiLLM:
             self.logger.error(f"Unexpected error when calling Gemini API: {e}")
             traceback.print_exc()
             return "", 0, "error"
+    
+    def _call_with_retry(self, contents, config, max_retries=3):
+        """
+        带重试机制的API调用
+        
+        Args:
+            contents: Gemini内容
+            config: 生成配置
+            max_retries: 最大重试次数
+            
+        Returns:
+            API响应对象
+            
+        Raises:
+            Exception: 重试耗尽后仍然失败
+        """
+        last_exception = None
+        
+        for attempt in range(max_retries + 1):  # +1 因为包含初次尝试
+            try:
+                if attempt > 0:
+                    # 指数退避 + 随机抖动
+                    wait_time = min(2 ** attempt + random.uniform(0, 1), 30)  # 最大等待30秒
+                    self.logger.info(f"🔄 重试第 {attempt} 次，等待 {wait_time:.1f} 秒...")
+                    time.sleep(wait_time)
+                
+                # 尝试调用API
+                response = self.gemini_client.models.generate_content(
+                    model=self.gemini_model_name,
+                    contents=contents,
+                    config=config,
+                )
+                
+                if attempt > 0:
+                    self.logger.info(f"✅ 重试成功！第 {attempt} 次尝试")
+                
+                return response
+                
+            except (google_exceptions.DeadlineExceeded, 
+                    google_exceptions.ResourceExhausted,
+                    google_exceptions.ServiceUnavailable,
+                    google_exceptions.InternalServerError) as e:
+                # 可重试的错误类型
+                last_exception = e
+                self.logger.warning(f"⚠️ 可重试错误 (第 {attempt + 1}/{max_retries + 1} 次): {type(e).__name__}: {e}")
+                
+                if attempt == max_retries:
+                    self.logger.error(f"❌ 重试次数耗尽，最终失败")
+                    raise last_exception
+                    
+            except (google_exceptions.PermissionDenied,
+                    google_exceptions.InvalidArgument) as e:
+                # 不可重试的错误，直接抛出
+                self.logger.error(f"❌ 不可重试错误: {type(e).__name__}: {e}")
+                raise e
+                
+            except Exception as e:
+                # 其他未知错误，也尝试重试
+                last_exception = e
+                self.logger.warning(f"⚠️ 未知错误 (第 {attempt + 1}/{max_retries + 1} 次): {type(e).__name__}: {e}")
+                
+                if attempt == max_retries:
+                    self.logger.error(f"❌ 重试次数耗尽，最终失败")
+                    raise last_exception
+        
+        # 不应该到达这里
+        raise last_exception or Exception("重试机制异常")

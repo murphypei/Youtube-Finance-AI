@@ -38,6 +38,9 @@ class FinancialInfoExtractor:
         logger.info(f"🔧 初始化信息提取器, use_gemini={use_gemini}, GEMINI_AVAILABLE={GEMINI_AVAILABLE}")
         
         self.use_gemini = use_gemini and GEMINI_AVAILABLE
+        
+        # 定义财经信息提取的JSON schema
+        self.response_schema = self._create_financial_schema()
         self.llm = None
         
         if not GEMINI_AVAILABLE:
@@ -69,47 +72,365 @@ class FinancialInfoExtractor:
         if not self.use_gemini:
             return self._extract_without_llm(transcription_text, video_title)
         
-        try:
-            logger.info("🤖 开始使用Gemini提取关键信息...")
+        # 使用重试机制进行提取
+        return self._extract_with_retry(transcription_text, video_title, max_attempts=3)
+    
+    def _extract_with_retry(self, transcription_text: str, video_title: str, max_attempts: int = 3) -> Dict[str, Any]:
+        """
+        带重试的信息提取
+        
+        Args:
+            transcription_text: 转录文本
+            video_title: 视频标题  
+            max_attempts: 最大尝试次数
             
-            # 构建提取prompt
-            prompt = self._build_extraction_prompt(transcription_text, video_title)
-            
-            # 调用LLM
-            messages = [
-                {"role": "user", "content": prompt}
-            ]
-            
-            response, tokens_used, finish_reason = self.llm.call(
-                message_list=messages,
-                temperature=0.1,
-                max_tokens=8000,
-                thinking_budget=8000,  # 确保在支持范围内 (1-24576)
-                response_mime_type="application/json"
-            )
-            
-            logger.info(f"💰 LLM调用完成，使用tokens: {tokens_used}")
-            
-            if finish_reason != "stop":
-                logger.warning(f"⚠️ LLM调用未正常结束: {finish_reason}")
-            
-            # 解析JSON响应
+        Returns:
+            提取的信息字典
+        """
+        last_error = None
+        
+        for attempt in range(max_attempts):
             try:
-                extracted_info = json.loads(response)
-                extracted_info["extraction_method"] = "gemini_llm"
-                extracted_info["tokens_used"] = tokens_used
+                logger.info(f"🤖 开始使用Gemini提取关键信息... (第 {attempt + 1}/{max_attempts} 次)")
                 
-                logger.info("✅ 信息提取成功")
-                return extracted_info
+                # 构建提取prompt
+                prompt = self._build_extraction_prompt(transcription_text, video_title)
                 
+                # 调用LLM
+                messages = [{"role": "user", "content": prompt}]
+                
+                response, tokens_used, finish_reason = self.llm.call(
+                    message_list=messages,
+                    temperature=0.1,
+                    max_tokens=8000,
+                    thinking_budget=8000,
+                    response_mime_type="application/json",
+                    response_schema=self.response_schema
+                )
+                
+                logger.info(f"💰 LLM调用完成，使用tokens: {tokens_used}")
+                
+                if finish_reason != "stop":
+                    logger.warning(f"⚠️ LLM调用未正常结束: {finish_reason}")
+                    # 如果不是正常结束，但有响应内容，仍然尝试解析
+                    if not response.strip():
+                        raise Exception(f"LLM调用未正常结束且响应为空: {finish_reason}")
+                
+                # 解析JSON响应 - 多次尝试
+                extracted_info = self._parse_json_response(response, attempt + 1)
+                if extracted_info:
+                    extracted_info["extraction_method"] = "gemini_llm"
+                    extracted_info["tokens_used"] = tokens_used
+                    extracted_info["attempts_used"] = attempt + 1
+                    
+                    logger.info(f"✅ 信息提取成功 (第 {attempt + 1} 次尝试)")
+                    return extracted_info
+                else:
+                    raise Exception("JSON解析失败")
+                    
+            except Exception as e:
+                last_error = e
+                logger.warning(f"⚠️ 第 {attempt + 1} 次提取失败: {e}")
+                
+                if attempt < max_attempts - 1:
+                    import time
+                    wait_time = 2 ** attempt  # 指数退避: 1, 2, 4秒
+                    logger.info(f"🔄 等待 {wait_time} 秒后重试...")
+                    time.sleep(wait_time)
+        
+        logger.error(f"❌ 所有提取尝试都失败了，最后错误: {last_error}")
+        logger.info("🔄 回退到基础规则提取")
+        return self._extract_without_llm(transcription_text, video_title)
+    
+    def _parse_json_response(self, response: str, attempt_num: int) -> Optional[Dict[str, Any]]:
+        """
+        解析JSON响应，支持多种格式清理
+        
+        Args:
+            response: 原始响应
+            attempt_num: 尝试次数
+            
+        Returns:
+            解析后的字典或None
+        """
+        if not response.strip():
+            logger.warning("响应为空")
+            return None
+        
+        # 尝试多种方式清理和解析JSON
+        json_attempts = [
+            response.strip(),  # 原始响应
+            response.strip().strip('```json').strip('```'),  # 移除markdown代码块
+            response[response.find('{'):response.rfind('}') + 1] if '{' in response and '}' in response else response,  # 提取JSON部分
+        ]
+        
+        for i, json_str in enumerate(json_attempts):
+            try:
+                if json_str.strip():
+                    parsed = json.loads(json_str)
+                    if i > 0:
+                        logger.info(f"JSON解析成功 (使用第 {i + 1} 种清理方法)")
+                    return parsed
             except json.JSONDecodeError as e:
-                logger.error(f"❌ JSON解析失败: {e}")
-                logger.info("📝 原始响应:", response[:500] + "..." if len(response) > 500 else response)
-                return self._extract_without_llm(transcription_text, video_title)
-                
-        except Exception as e:
-            logger.error(f"❌ LLM信息提取失败: {e}")
-            return self._extract_without_llm(transcription_text, video_title)
+                if i == 0:
+                    logger.debug(f"第 {i + 1} 种JSON解析失败: {e}")
+                continue
+        
+        # 记录失败详情
+        logger.error(f"所有JSON解析方法都失败了")
+        logger.info(f"原始响应 (前500字符): {response[:500]}")
+        return None
+    
+    def _create_financial_schema(self) -> Dict[str, Any]:
+        """
+        创建财经信息提取的JSON schema
+        
+        Returns:
+            完整的JSON schema定义
+        """
+        return {
+            "type": "object",
+            "required": [
+                "summary",
+                "market_overview", 
+                "macroeconomic_data",
+                "stock_analysis",
+                "key_events",
+                "investment_advice",
+                "risks_and_warnings"
+            ],
+            "properties": {
+                "summary": {
+                    "type": "string",
+                    "description": "对整个财经分析内容的简明总结"
+                },
+                "market_overview": {
+                    "type": "object",
+                    "required": ["date", "major_indices", "market_sentiment"],
+                    "properties": {
+                        "date": {
+                            "type": "string",
+                            "description": "分析日期，格式YYYY-MM-DD"
+                        },
+                        "major_indices": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "required": ["name", "performance"],
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "description": "指数名称，如S&P 500, 纳斯达克等"
+                                    },
+                                    "performance": {
+                                        "type": "string",
+                                        "description": "当日表现描述"
+                                    },
+                                    "current_level": {
+                                        "type": "string",
+                                        "description": "当前点位或价格"
+                                    },
+                                    "key_levels": {
+                                        "type": "array",
+                                        "items": {"type": "string"},
+                                        "description": "关键技术位"
+                                    },
+                                    "analysis": {
+                                        "type": "string",
+                                        "description": "技术分析和走势解读"
+                                    }
+                                }
+                            },
+                            "description": "主要市场指数分析"
+                        },
+                        "market_sentiment": {
+                            "type": "string",
+                            "description": "整体市场情绪和驱动因素"
+                        }
+                    }
+                },
+                "macroeconomic_data": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "required": ["indicator", "impact"],
+                        "properties": {
+                            "indicator": {
+                                "type": "string",
+                                "description": "宏观经济指标名称"
+                            },
+                            "actual_value": {
+                                "type": "string",
+                                "description": "实际公布值"
+                            },
+                            "expected_value": {
+                                "type": "string",
+                                "description": "市场预期值"
+                            },
+                            "previous_value": {
+                                "type": "string",
+                                "description": "前值"
+                            },
+                            "impact": {
+                                "type": "string",
+                                "description": "对市场的影响分析"
+                            },
+                            "interpretation": {
+                                "type": "string",
+                                "description": "数据解读和意义"
+                            }
+                        }
+                    },
+                    "description": "宏观经济数据和分析"
+                },
+                "stock_analysis": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "required": ["symbol", "key_points"],
+                        "properties": {
+                            "symbol": {
+                                "type": "string",
+                                "description": "股票代码或ETF代码"
+                            },
+                            "company_name": {
+                                "type": "string",
+                                "description": "公司或产品全名"
+                            },
+                            "current_price": {
+                                "type": "string",
+                                "description": "当前价格或价格区间"
+                            },
+                            "price_change": {
+                                "type": "string",
+                                "description": "价格变化"
+                            },
+                            "key_points": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "关键分析要点"
+                            },
+                            "price_levels": {
+                                "type": "object",
+                                "properties": {
+                                    "support": {
+                                        "type": "array",
+                                        "items": {"type": "string"},
+                                        "description": "支撑位"
+                                    },
+                                    "resistance": {
+                                        "type": "array",
+                                        "items": {"type": "string"},
+                                        "description": "阻力位"
+                                    },
+                                    "target": {
+                                        "type": "array", 
+                                        "items": {"type": "string"},
+                                        "description": "目标位"
+                                    }
+                                }
+                            },
+                            "recommendation": {
+                                "type": "string",
+                                "enum": ["买入", "持有", "卖出", "观望"],
+                                "description": "投资建议"
+                            },
+                            "risk_reward_ratio": {
+                                "type": "string",
+                                "description": "风险收益比"
+                            },
+                            "analyst_notes": {
+                                "type": "string",
+                                "description": "分析师备注"
+                            }
+                        }
+                    },
+                    "description": "个股分析"
+                },
+                "key_events": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "required": ["event", "impact"],
+                        "properties": {
+                            "event": {
+                                "type": "string",
+                                "description": "关键事件描述"
+                            },
+                            "date": {
+                                "type": "string",
+                                "description": "事件日期"
+                            },
+                            "impact": {
+                                "type": "string",
+                                "description": "对市场的影响"
+                            },
+                            "category": {
+                                "type": "string",
+                                "enum": ["财报", "政策", "经济数据", "企业行为", "其他"],
+                                "description": "事件类别"
+                            }
+                        }
+                    },
+                    "description": "影响市场的关键事件"
+                },
+                "investment_advice": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "required": ["advice", "timeframe"],
+                        "properties": {
+                            "advice": {
+                                "type": "string",
+                                "description": "具体投资建议"
+                            },
+                            "timeframe": {
+                                "type": "string",
+                                "enum": ["短期", "中期", "长期"],
+                                "description": "建议的时间框架"
+                            },
+                            "rationale": {
+                                "type": "string",
+                                "description": "建议的理由"
+                            },
+                            "target_audience": {
+                                "type": "string",
+                                "description": "目标投资者类型"
+                            }
+                        }
+                    },
+                    "description": "投资建议"
+                },
+                "risks_and_warnings": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "required": ["risk", "severity"],
+                        "properties": {
+                            "risk": {
+                                "type": "string",
+                                "description": "风险描述"
+                            },
+                            "severity": {
+                                "type": "string",
+                                "enum": ["低", "中", "高"],
+                                "description": "风险严重程度"
+                            },
+                            "probability": {
+                                "type": "string",
+                                "enum": ["低", "中", "高"],
+                                "description": "风险发生概率"
+                            },
+                            "mitigation": {
+                                "type": "string",
+                                "description": "风险缓解措施"
+                            }
+                        }
+                    },
+                    "description": "风险提示和警告"
+                }
+            }
+        }
     
     def _build_extraction_prompt(self, text: str, title: str) -> str:
         """构建信息提取的prompt"""
@@ -254,7 +575,7 @@ def extract_financial_info(transcription_text: str,
 def test_with_real_transcription():
     """使用真实的转录文本测试LLM信息提取功能"""
     # 读取真实的转录文本
-    transcription_file = Path(__file__).parent.parent / "downloads" / "2025-09-09" / "transcription" / "视野环球财经-2025-09-09.txt"
+    transcription_file = Path(__file__).parent.parent / "downloads" / "rhino_finance" / "2025-09-10" / "transcription" / "rhino_ZKo41ja8rD0.txt"
     
     if not transcription_file.exists():
         print(f"❌ 转录文件不存在: {transcription_file}")
@@ -276,7 +597,7 @@ def test_with_real_transcription():
         )
         
         # 保存结果
-        output_file = Path(__file__).parent.parent / "downloads" / "2025-09-09" / "analysis" / "视野环球财经-2025-09-09_analysis2.json"
+        output_file = Path(__file__).parent.parent / "downloads" / "rhino_finance" / "2025-09-10" / "analysis" / "rhino_ZKo41ja8rD0_analysis2.json"
         extractor.save_extracted_info(result, str(output_file))
         
         # 显示提取结果摘要

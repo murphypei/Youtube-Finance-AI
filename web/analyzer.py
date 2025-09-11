@@ -151,24 +151,35 @@ class FinancialAnalyzer:
                             'date': date,
                             'source_file': item.get('file_name', ''),
                             'indicator': data_point.get('indicator', ''),
-                            'value': data_point.get('value', ''),
-                            'expected': data_point.get('expected', ''),
+                            'value': data_point.get('actual_value', data_point.get('value', '')),
+                            'expected': data_point.get('expected_value', data_point.get('expected', '')),
                             'impact': data_point.get('impact', ''),
-                            'description': data_point.get('description', '')
+                            'description': data_point.get('interpretation', data_point.get('description', ''))
                         })
                 
                 # 提取关键事件
                 key_events = item.get('key_events', [])
                 if key_events:
                     for event in key_events:
+                        # 如果event是字符串，直接使用；如果是字典，提取相关字段
+                        if isinstance(event, str):
+                            event_desc = event
+                            event_impact = ''
+                        elif isinstance(event, dict):
+                            event_desc = event.get('description', event.get('event', str(event)))
+                            event_impact = event.get('impact', '')
+                        else:
+                            event_desc = str(event)
+                            event_impact = ''
+                            
                         macro_news.append({
                             'date': date,
                             'source_file': item.get('file_name', ''),
                             'indicator': '重要事件',
-                            'value': event,
+                            'value': event_desc,
                             'expected': '',
-                            'impact': '',
-                            'description': event
+                            'impact': event_impact,
+                            'description': event_desc
                         })
             
             processed_dates += 1
@@ -207,15 +218,22 @@ class FinancialAnalyzer:
                     # 提取价格信息
                     current_price = stock.get('current_price', '')
                     price_levels = stock.get('price_levels', {})
-                    support_levels = price_levels.get('support', [])
-                    resistance_levels = price_levels.get('resistance', [])
                     
-                    # 提取操作建议
+                    # 支撑阻力位可能在不同字段中
+                    support_levels = (price_levels.get('support', []) or 
+                                    price_levels.get('support_levels', []) or
+                                    [])
+                    resistance_levels = (price_levels.get('resistance', []) or 
+                                       price_levels.get('resistance_levels', []) or
+                                       [])
+                    
+                    # 提取操作建议 - 尝试多个可能的字段
                     outlook = stock.get('outlook', '')
                     recommendation = stock.get('recommendation', '')
+                    analyst_notes = stock.get('analyst_notes', '')
                     
-                    # 推断操作类型
-                    action = self._determine_action(outlook, recommendation)
+                    # 推断操作类型 - 综合多个字段
+                    action = self._determine_action(outlook, recommendation + " " + analyst_notes)
                     
                     position_info = {
                         'date': date,
@@ -251,19 +269,37 @@ class FinancialAnalyzer:
             recommendation: 建议描述
             
         Returns:
-            操作类型: 买入/卖出/持有
+            操作类型: 买入/卖出/持有/观望
         """
-        text = (outlook + " " + recommendation).lower()
+        text = (str(outlook) + " " + str(recommendation)).lower()
         
-        # 买入信号关键词
-        buy_keywords = ['买入', '建议买入', '逢低买入', '增持', '建议增持', 'buy', 'long', '看好', '建议关注']
+        # 买入信号关键词 - 更全面的关键词
+        buy_keywords = [
+            '买入', '建议买入', '逢低买入', '增持', '建议增持', 'buy', 'long', 
+            '看好', '建议关注', '加仓', '建议加仓', '积极', '强烈推荐', 
+            '上涨', '看涨', '建议持有并适度加仓', '强势', '重回上攻'
+        ]
         
         # 卖出信号关键词  
-        sell_keywords = ['卖出', '建议卖出', '减持', '建议减持', 'sell', 'short', '看空', '谨慎']
+        sell_keywords = [
+            '卖出', '建议卖出', '减持', '建议减持', 'sell', 'short', 
+            '看空', '谨慎', '减仓', '不建议', '超买', '不宜追高',
+            '获利了结', '止盈', '规避风险', '破位下行'
+        ]
         
         # 持有信号关键词
-        hold_keywords = ['持有', '维持', 'hold', '观望', '等待']
+        hold_keywords = [
+            '持有', '维持', 'hold', '长线持有', '保持', '继续持有',
+            '稳健', '维持仓位', '不变', '波段'
+        ]
         
+        # 观望信号关键词
+        watch_keywords = [
+            '观望', '等待', '暂时观望', '谨慎观望', '静观其变', 
+            '等待时机', '暂不操作', '关注', '跟踪'
+        ]
+        
+        # 按优先级匹配
         for keyword in buy_keywords:
             if keyword in text:
                 return '买入'
@@ -275,6 +311,10 @@ class FinancialAnalyzer:
         for keyword in hold_keywords:
             if keyword in text:
                 return '持有'
+                
+        for keyword in watch_keywords:
+            if keyword in text:
+                return '观望'
         
         return '观望'  # 默认
     

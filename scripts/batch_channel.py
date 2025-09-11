@@ -18,7 +18,7 @@ project_root = Path(__file__).parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from tools.app import download_and_transcribe_youtube
+from scripts.single_video import download_and_transcribe_youtube
 
 class RhinoFinanceProcessor:
     """Rhino Finance 频道处理器"""

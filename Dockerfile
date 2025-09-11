@@ -41,20 +41,19 @@ RUN pip install -e .
 
 # 复制源代码（最后复制，避免代码变化影响前面的缓存）
 COPY core/ ./core/
-COPY tools/ ./tools/
+COPY scripts/ ./scripts/
 COPY web/ ./web/
-COPY run_app.py ./
 COPY prompts/ ./prompts/
 COPY config/ ./config/
 
 # 创建必要目录并预下载模型
-RUN mkdir -p /app/downloads /app/downloads && \
+RUN mkdir -p /app/downloads && \
     python -c "import whisper; whisper.load_model('base')"
 
 # 暴露端口
+EXPOSE 5000
 EXPOSE 8850
-EXPOSE 8851
-EXPOSE 8852
+
 
 # 设置默认命令
-CMD ["python", "run_app.py", "single"]
+CMD ["python", "scripts/single_video.py"]
